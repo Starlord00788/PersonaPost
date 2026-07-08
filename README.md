@@ -1,6 +1,6 @@
 # PersonaPost AI
 
-PersonaPost AI is a 2-month internship project that helps users turn writing samples, reference material, and trending topics into social content drafts that sound like them.
+PersonaPost AI is a project that helps users turn writing samples, reference material, and trending topics into social content drafts that sound like them.
 
 The goal of the project is simple: build something useful, credible, and close to the kind of workflow a product team at Inspire AI would actually need.
 
