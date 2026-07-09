@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
@@ -44,6 +45,8 @@ class DraftRequest(BaseModel):
     voice_profile: Optional[VoiceSignals] = None
     trend_title: Optional[str] = None
     knowledge_snippets: List[str] = Field(default_factory=list)
+    approve: bool = False
+    auto_retrieve_knowledge: bool = True
 
 
 class DraftResponse(BaseModel):
@@ -51,3 +54,45 @@ class DraftResponse(BaseModel):
     draft: str
     reviewer_score: int
     revision_notes: List[str]
+    persisted: bool = False
+
+
+class CalendarEntryItem(BaseModel):
+    entry_id: int
+    draft_id: Optional[int] = None
+    title: str
+    draft_excerpt: str
+    status: str
+    scheduled_for: Optional[datetime] = None
+    created_at: datetime
+
+
+class CalendarResponse(BaseModel):
+    items: List[CalendarEntryItem]
+
+
+class KnowledgeIngestRequest(BaseModel):
+    niche: str = "general"
+    documents: List[str] = Field(default_factory=list, min_length=1)
+
+
+class KnowledgeIngestResponse(BaseModel):
+    niche: str
+    chunks_saved: int
+
+
+class KnowledgeRetrieveRequest(BaseModel):
+    niche: str = "general"
+    query: str
+    top_k: int = 3
+
+
+class KnowledgeSnippet(BaseModel):
+    text: str
+    score: float
+
+
+class KnowledgeRetrieveResponse(BaseModel):
+    niche: str
+    query: str
+    snippets: List[KnowledgeSnippet]

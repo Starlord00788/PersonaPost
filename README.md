@@ -6,7 +6,7 @@ The goal of the project is simple: build something useful, credible, and close t
 
 ## What this project solves
 
-Professionals and founders know their domain but do not always have time to write consistent, high-quality content. PersonaPost AI addresses that by combining:
+Professionals and founders know their domain but do not always have time to write consistent, high-quality content. Generic AI writers sound robotic, repetitive, and dry. PersonaPost AI addresses that by combining:
 
 - voice learning from user samples
 - knowledge retrieval from uploaded documents
@@ -46,9 +46,9 @@ flowchart TD
 
 | Layer | Choice |
 |---|---|
-| Frontend | React, Vite |
+| Frontend | React, Vite, Tailwind CSS v3, Framer Motion, Radix UI |
 | Backend | FastAPI, Pydantic |
-| Database | PostgreSQL |
+| Database | SQLite (Dev) / PostgreSQL (Prod Containerized) |
 | Vector storage | ChromaDB |
 | LLM | Groq API with local fallback |
 | Trend sources | Reddit, Google Trends, Hacker News |
@@ -67,34 +67,97 @@ flowchart TD
 ```
 PersonaPostAi/
 ├── backend/
+│   ├── app/
+│   │   ├── config.py
+│   │   ├── db.py
+│   │   ├── models.py
+│   │   ├── routes.py
+│   │   ├── schemas.py
+│   │   └── services/
+│   └── tests/
 ├── frontend/
+│   └── src/
+│       ├── App.jsx
+│       ├── lib/api.js
+│       └── styles.css
 ├── docs/
 ├── docker/
-├── scripts/
-├── .github/
+│   └── docker-compose.yml
 └── README.md
 ```
 
 ## Getting started
 
+### Pre-requisites
+* **Python Version:** Python 3.11 or 3.12 is required. Newer versions (e.g. 3.13 or 3.14) will cause build errors with compiled dependencies like `pydantic-core` and SQLAlchemy.
+* **Node.js:** Node.js v18 or later.
+
+### Local Setup Steps
+
 ```bash
 cd PersonaPostAi
 
-# backend
+# 1. Setup backend virtual environment
 cd backend
-python -m pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+py -3.12 -m venv .venv
+# Activate in Windows PowerShell:
+.\.venv\Scripts\Activate.ps1
+# Upgrade pip and install dependencies:
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 
-# frontend
+# Run backend development server
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
+
+# 2. Setup frontend development server
 cd ../frontend
 npm install
 npm run dev
+```
+
+### Running with Docker Compose
+To launch the full suite (Frontend + Backend + PostgreSQL Database) in containerized mode:
+
+```bash
+cd PersonaPostAi/docker
+docker compose up --build
 ```
 
 Copy the environment example files before running locally:
 
 - `backend/.env.example` to `backend/.env`
 - `frontend/.env.example` to `frontend/.env`
+
+---
+
+## Detailed Tech implementation Notes
+
+### 1. Custom Voice Profiling & Tokenizer
+The system features a suffix-stemming tokenization module in `backend/app/services/knowledge.py`. It strips grammatical suffixes (`-ing`, `-tion`, `-ment`, etc.) from words during retrieval. This allows a search for "automation" to successfully match against "automate", raising Jaccard-similarity match relevance without external libraries.
+
+### 2. Strict JSON Contracts & Parser Security
+LLM responses can return malformed JSON or markdown syntax wrappers (` ```json ... ``` `). The backend includes a robust regex stripper `_strip_fences()` inside `generation.py` and `review.py`. This sanitizes LLM markdown containers before passing inputs to `json.loads()`, falling back to deterministic stubs if the output fails validation.
+
+### 3. Awwwards & Premium-Inspired Frontend UI
+The UI is inspired by modern editorial portfolios (e.g. InspireAI and Awwwards-winning layouts):
+* **Custom Cursor:** Dot + ring following mouse movements with spring physics using `framer-motion`.
+* **Spotlight Interaction:** Hovering over cards highlights them dynamically relative to the cursor's coordinates.
+* **Ambient Glows & Noise Overlay:** Subtle color gradients blur background sections behind a 2.2% opacity SVG noise map.
+* **Infinite Ticker:** Double-tracked horizontal ticker detailing the application capabilities.
+
+---
+
+## Troubleshooting Guide
+
+#### "Fatal error in launcher: Unable to create process"
+This occurs if you rename the backend virtual environment folder after creating it (e.g., from `.venv312` to `.venv`). Python virtual environments bake the absolute file path into their executable launchers. 
+**Solution:** Delete the `.venv` folder completely and run `py -3.12 -m venv .venv` from scratch.
+
+#### "pydantic-core compile errors on installation"
+You are likely using a Python version higher than 3.12 (like 3.13 or 3.14) where pre-compiled wheels for key backend packages are not yet available.
+**Solution:** Ensure you use `py -3.12` to construct your virtual environment.
+
+---
 
 ## Scope for the internship MVP
 
@@ -124,4 +187,17 @@ Not included yet:
 
 ## Status
 
-The repository currently contains the project brief, architecture notes, weekly standup format, and the first backend and frontend scaffolding. The next step is to build the first usable feature slice and commit it in small pieces.
+Current backend slice is operational with:
+
+- Groq-first draft and review pipeline with deterministic fallback mode
+- persisted voice profiles and threshold-gated draft approvals
+- trend fetching with live-source attempts and fallback behavior
+- calendar endpoint backed by persisted entries
+- route-level tests for core API flow
+
+Current frontend slice includes:
+
+- API client wrappers for backend endpoints
+- voice profile creation, trend selection, draft generation, and calendar views
+- persisted-status feedback on draft approval attempts
+

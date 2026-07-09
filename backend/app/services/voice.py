@@ -1,6 +1,19 @@
 from hashlib import sha1
+import re
 
 from app.schemas import VoiceProfileRequest, VoiceProfileResponse, VoiceSignals
+
+EMOJI_PATTERN = re.compile(
+    "["
+    "\U0001F600-\U0001F64F"
+    "\U0001F300-\U0001F5FF"
+    "\U0001F680-\U0001F6FF"
+    "\U0001F1E0-\U0001F1FF"
+    "\U00002700-\U000027BF"
+    "\U0001F900-\U0001F9FF"
+    "]+",
+    flags=re.UNICODE,
+)
 
 
 def _count_matches(samples: list[str], words: tuple[str, ...]) -> int:
@@ -28,7 +41,7 @@ def build_voice_profile(payload: VoiceProfileRequest) -> VoiceProfileResponse:
 
     long_sentence_markers = sample_text.count(",") + sample_text.count(";")
     sentence_length = "short" if long_sentence_markers < 6 else "medium"
-    emoji_usage = "low" if "😀" not in sample_text and ":" not in sample_text else "moderate"
+    emoji_usage = "moderate" if EMOJI_PATTERN.search(sample_text) else "low"
     confidence = min(0.98, 0.55 + (len(payload.samples) * 0.07))
 
     profile_seed = sha1("||".join(payload.samples).encode("utf-8")).hexdigest()[:12]

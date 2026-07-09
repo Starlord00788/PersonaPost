@@ -21,3 +21,5 @@ Use Groq as the primary LLM provider when a key is available, and keep a local f
 ## Notes
 
 This ADR will be revisited if the team later adds a different provider or a self-hosted model.
+
+Backend environment note: use Python 3.11 or 3.12 for backend development. Newer CPython versions may fail on some compiled dependencies (for example pydantic-core) until upstream wheels catch up.
