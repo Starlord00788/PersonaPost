@@ -128,7 +128,7 @@ flowchart TD
 ```
 
 ### 4. Database Schema Relationships
-The local persistence layer relies on two modes: SQLite (`personapost.db`) during development and PostgreSQL when deployed inside Docker Containers.
+The local persistence layer relies on two modes: SQLite (`personapost.db`) during local development and PostgreSQL when deployed in production. Database migrations are managed by Alembic.
 
 ```mermaid
 erDiagram
@@ -150,13 +150,69 @@ erDiagram
         string content
         timestamp created_at
     }
-    CALENDAR_ENTRY {
-        int entry_id PK
-        string title
-        string draft_excerpt
-        string full_content
-        string status
+    DRAFTS {
+        int id PK
+        string niche
+        string goal
+        string platform
+        string plan
+        string draft
+        int reviewer_score
+        string revision_notes_json
+        bool approved
         timestamp created_at
     }
+    CALENDAR_ENTRY {
+        int id PK
+        int draft_id FK
+        string title
+        string draft_excerpt
+        string platform
+        string status
+        timestamp scheduled_for
+        timestamp created_at
+    }
+    VOICE_PROFILE ||--o| DRAFTS : guides
+    DRAFTS ||--o| CALENDAR_ENTRY : schedules
+```
+
+### 5. API Security & Access Controls (JWT Flow)
+High-mutation endpoints enforce single-user JWT verification before processing requests.
+
+```mermaid
+flowchart LR
+    Client[Client Request] --> AuthHeader{Authorization Header?}
+    AuthHeader -- Yes --> Decrypt[jwt.decode token]
+    Decrypt --> UserMatch{Username == admin?}
+    UserMatch -- Yes --> Endpoint[Access Endpoint]
+    UserMatch -- No --> Err401[401 Unauthorized]
+    Decrypt -- Expired/Invalid --> Err401
+    AuthHeader -- No --> Err401
+```
+
+### 6. Sliding-Window Rate Limiter Flow
+To prevent endpoint flooding and protect LLM resource allocations, a per-IP sliding window is evaluated.
+
+```mermaid
+flowchart TD
+    ClientIP[Client IP] --> Window[Retrieve IP Sliding Window List]
+    Window --> Evict[Remove Timestamps older than 60s]
+    Evict --> Count{Timestamps Count >= 10?}
+    Count -- Yes --> Err429[429 Rate Limit Exceeded]
+    Count -- No --> Append[Append Current Timestamp]
+    Append --> Proceed[Proceed to Endpoint]
+```
+
+### 7. Browser-Native Text-To-Speech (TTS) Reader Flow
+Drafts are read aloud using local speech synthesis APIs, dynamically adjusting rates and pitches based on the selected destination platform rules.
+
+```mermaid
+flowchart TD
+    DraftText[Generated Draft Text] --> PlatformCheck{Selected Platform?}
+    PlatformCheck -- LinkedIn --> Professional[Set Rate=0.95, Pitch=1.0]
+    PlatformCheck -- X / Twitter --> Punchy[Set Rate=1.08, Pitch=1.05]
+    PlatformCheck -- Other --> Standard[Set Rate=1.0, Pitch=1.0]
+    Professional & Punchy & Standard --> TTS[SpeechSynthesis API]
+    TTS --> VoiceRead[Play Audio Out Loud]
 ```
 
