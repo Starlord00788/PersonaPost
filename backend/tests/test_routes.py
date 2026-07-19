@@ -145,3 +145,26 @@ def test_calendar_route_returns_saved_items() -> None:
     assert response.status_code == 200
     data = response.json()
     assert "items" in data
+
+
+def test_generation_rate_limiter_fires_429(monkeypatch) -> None:
+    from app.services import generation
+    monkeypatch.setattr(generation, "get_groq_client", lambda: None)
+    
+    from app.middleware.rate_limit import _generation_limiter
+    _generation_limiter._windows.clear()
+
+    client = TestClient(app)
+    payload = {
+        "niche": "ai",
+        "goal": "educational",
+        "knowledge_snippets": ["Test limit"],
+    }
+
+    for _ in range(10):
+        response = client.post("/api/draft", json=payload)
+        assert response.status_code == 200
+
+    response = client.post("/api/draft", json=payload)
+    assert response.status_code == 429
+    assert "Retry-After" in response.headers

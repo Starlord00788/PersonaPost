@@ -22,6 +22,10 @@ def test_auth_enforcement_and_validation():
         response = client.post("/api/voice-profile", json={"samples": ["test"]})
         assert response.status_code == 401
 
+        # 1b. Access protected /api/draft route without token -> 401
+        response = client.post("/api/draft", json={"niche": "ai", "goal": "educational"})
+        assert response.status_code == 401
+
         # 2. Login with invalid credentials -> 401
         response = client.post("/api/auth/token", data={"username": "wrong", "password": "wrong"})
         assert response.status_code == 401
