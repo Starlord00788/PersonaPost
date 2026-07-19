@@ -9,8 +9,11 @@ def test_auth_enforcement_and_validation():
         del app.dependency_overrides[get_current_user]
 
     from app.config import settings
-    print("TEST SETTINGS USERNAME:", settings.admin_username)
-    print("TEST SETTINGS HASH:", settings.admin_password_hash)
+    from passlib.hash import bcrypt
+    original_username = settings.admin_username
+    original_hash = settings.admin_password_hash
+    settings.admin_username = "testadmin"
+    settings.admin_password_hash = bcrypt.hash("testpassword")
 
     try:
         client = TestClient(app)
@@ -24,7 +27,6 @@ def test_auth_enforcement_and_validation():
         assert response.status_code == 401
 
         # 3. Login with valid credentials -> 200 + access_token
-        # credentials in conftest.py env are: testadmin / testpassword
         response = client.post("/api/auth/token", data={"username": "testadmin", "password": "testpassword"})
         assert response.status_code == 200
         token = response.json()["access_token"]
@@ -41,5 +43,7 @@ def test_auth_enforcement_and_validation():
         assert response.json()["username"] == "testadmin"
 
     finally:
-        # Restore the overrides
+        # Restore the overrides and settings
         app.dependency_overrides = original_overrides
+        settings.admin_username = original_username
+        settings.admin_password_hash = original_hash
