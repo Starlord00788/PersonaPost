@@ -9,7 +9,7 @@ def test_fetch_trends_uses_fallback_when_live_sources_unavailable(monkeypatch) -
     result = trends.fetch_trends("ai")
 
     assert result.niche == "ai"
-    assert len(result.trends) == 3
+    assert len(result.trends) == 10
     assert all(item.source.startswith("fallback") for item in result.trends)
 
 

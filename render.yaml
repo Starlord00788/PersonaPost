@@ -1,0 +1,75 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# PersonaPost AI — Render.com Blueprint (render.yaml)
+# Docs: https://render.com/docs/blueprint-spec
+#
+# Deploy everything in one click:
+#   1. Push this file to your GitHub repository.
+#   2. In the Render dashboard choose "New → Blueprint" and select the repo.
+#   3. Fill in the secret env vars when prompted.
+# ─────────────────────────────────────────────────────────────────────────────
+
+databases:
+  - name: personapost-db
+    databaseName: personapost
+    user: personapost
+    plan: free           # Change to "starter" or higher for production workloads
+    region: oregon       # Choose the region closest to your users
+    postgresMajorVersion: 16
+
+services:
+  - type: web
+    name: personapost-backend
+    runtime: python
+    region: oregon       # Must match the database region to minimise latency
+    plan: free           # Change to "starter" or higher for production workloads
+    rootDir: .           # Render checks out the entire repo; commands use this as CWD
+
+    buildCommand: |
+      pip install -r backend/requirements.txt &&
+      cd backend &&
+      alembic upgrade head
+
+    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+
+    healthCheckPath: /api/health
+
+    autoDeploy: true     # Re-deploy automatically on every push to the linked branch
+
+    envVars:
+      # ── Injected automatically by Render from the database resource above ──
+      - key: DATABASE_URL
+        fromDatabase:
+          name: personapost-db
+          property: connectionString
+
+      # ── Secrets — set values in the Render dashboard or via render CLI ─────
+      - key: SECRET_KEY
+        sync: false      # Render will prompt for the value; never stored in yaml
+
+      - key: ADMIN_USERNAME
+        sync: false
+
+      - key: ADMIN_PASSWORD_HASH
+        sync: false
+
+      - key: GROQ_API_KEY
+        sync: false
+
+      # ── Application configuration ─────────────────────────────────────────
+      - key: GROQ_GENERATION_MODEL
+        value: llama-3.3-70b-versatile
+
+      - key: GROQ_REVIEW_MODEL
+        value: llama-3.1-8b-instant
+
+      - key: MIN_APPROVAL_SCORE
+        value: "75"
+
+      - key: RATE_LIMIT_GENERATION_PER_MINUTE
+        value: "10"
+
+      - key: CORS_ORIGINS
+        sync: false      # e.g. https://your-app.vercel.app
+
+      - key: SENTRY_DSN
+        sync: false      # Leave blank in dashboard to disable Sentry

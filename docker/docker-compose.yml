@@ -1,51 +1,140 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# PersonaPost AI — Docker Compose
+#
+# Profiles
+#   dev  — mounts source directories as volumes for hot-reload development.
+#           Start with:  docker compose --profile dev up
+#   prod — builds optimised images from Dockerfiles.
+#           Start with:  docker compose --profile prod up --build
+# ─────────────────────────────────────────────────────────────────────────────
+
+x-backend-env: &backend-env
+  env_file:
+    - ../backend/.env
+
 services:
+
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
+    container_name: personapost_postgres
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: personapost
-      POSTGRES_USER: personapost
-      POSTGRES_PASSWORD: personapost
+      POSTGRES_DB: ${POSTGRES_DB:-personapost}
+      POSTGRES_USER: ${POSTGRES_USER:-personapost}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
-    volumes:
-      - personapost_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U personapost -d personapost"]
-      interval: 5s
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-personapost} -d ${POSTGRES_DB:-personapost}"]
+      interval: 10s
       timeout: 5s
-      retries: 20
+      retries: 5
+      start_period: 30s
+    networks:
+      - personapost_net
 
-  backend:
+  # ── Backend — DEV profile (source-mounted, auto-reload) ────────────────────
+  backend-dev:
+    profiles: [dev]
     image: python:3.12-slim
-    working_dir: /workspace/backend
+    container_name: personapost_backend_dev
+    restart: unless-stopped
+    working_dir: /app
+    command: >
+      sh -c "pip install -r requirements.txt --quiet &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     volumes:
-      - ../:/workspace
+      - ../backend:/app
+    <<: *backend-env
     environment:
-      DATABASE_URL: postgresql+psycopg://personapost:personapost@postgres:5432/personapost
-      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
-      GROQ_API_KEY: ${GROQ_API_KEY:-}
-      GROQ_GENERATION_MODEL: ${GROQ_GENERATION_MODEL:-llama-3.3-70b-versatile}
-      GROQ_REVIEW_MODEL: ${GROQ_REVIEW_MODEL:-llama-3.1-8b-instant}
-      MIN_APPROVAL_SCORE: ${MIN_APPROVAL_SCORE:-75}
+      PYTHONPATH: /app
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
-    command: bash -lc "python -m pip install -r requirements.txt && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - personapost_net
+
+  # ── Backend — PROD profile (built image) ───────────────────────────────────
+  backend:
+    profiles: [prod]
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend
+    container_name: personapost_backend
+    restart: unless-stopped
+    <<: *backend-env
+    environment:
+      PYTHONPATH: /app
+      PYTHONUNBUFFERED: "1"
     ports:
       - "8000:8000"
-
-  frontend:
-    image: node:20-alpine
-    working_dir: /workspace/frontend
-    volumes:
-      - ../:/workspace
-    environment:
-      VITE_API_BASE_URL: http://localhost:8000/api
     depends_on:
-      - backend
-    command: sh -lc "npm install && npm run dev -- --host 0.0.0.0"
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - personapost_net
+
+  # ── Frontend — DEV profile (Vite dev server via Node image) ───────────────
+  frontend-dev:
+    profiles: [dev]
+    image: node:20-alpine
+    container_name: personapost_frontend_dev
+    restart: unless-stopped
+    working_dir: /app
+    command: sh -c "npm ci --quiet && npm run dev -- --host 0.0.0.0 --port 5173"
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000
     ports:
       - "5173:5173"
+    depends_on:
+      - backend-dev
+    networks:
+      - personapost_net
 
+  # ── Frontend — PROD profile (nginx serving the compiled bundle) ────────────
+  frontend:
+    profiles: [prod]
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+    container_name: personapost_frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - personapost_net
+
+# ── Named volumes ─────────────────────────────────────────────────────────────
 volumes:
-  personapost_postgres_data:
+  postgres_data:
+    driver: local
+
+# ── Networks ──────────────────────────────────────────────────────────────────
+networks:
+  personapost_net:
+    driver: bridge

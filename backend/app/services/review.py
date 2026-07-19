@@ -54,17 +54,35 @@ def get_groq_client() -> Any | None:
 
 
 def _fallback_review(draft: str, payload: DraftRequest) -> tuple[int, list[str]]:
-    base = 74
+    import hashlib
+
+    # Compute a deterministic hash-based score so any content edit/refinement changes the score
+    h = int(hashlib.md5(draft.encode("utf-8")).hexdigest(), 16)
+    score = 68 + (h % 27)  # ranges 68 to 94
+
+    notes = []
+    
+    # Platform specific review rules for fallback
+    plat = getattr(payload, "platform", "linkedin")
+    if plat == "x" and len(draft) > 280:
+        score = max(35, score - 35)
+        notes.append("CRITICAL: Post exceeds X / Twitter limit of 280 characters.")
+    elif plat == "instagram" and len(draft) > 2200:
+        score = max(45, score - 25)
+        notes.append("CRITICAL: Post exceeds Instagram limit of 2200 characters.")
+
     if payload.voice_profile:
-        base += 8
-    if len(draft) > 220:
-        base += 4
-    notes = [
-        "Strengthen the opening line to create a clearer hook.",
-        "Include one concrete example tied to the audience's workflow.",
-        "Keep the call to action consistent with the selected tone.",
-    ]
-    return min(base, 95), notes
+        score = min(100, score + 3)
+    else:
+        notes.append("Consider building a Voice Profile for more tailored style scoring.")
+
+    if not notes:
+        notes = [
+            "Strengthen the opening line to create a clearer hook.",
+            "Include one concrete example tied to the audience's workflow.",
+            "Keep the call to action consistent with the selected tone.",
+        ]
+    return score, notes
 
 
 def review_draft(draft: str, payload: DraftRequest) -> tuple[int, list[str]]:
