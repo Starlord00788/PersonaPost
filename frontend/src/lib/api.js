@@ -9,25 +9,15 @@ export const apiConfig = {
   baseUrl: (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api').replace(/\/$/, ''),
 }
 
-// ── Auth token (sessionStorage to survive page refreshes securely) ─────────────
-let _token = typeof window !== 'undefined' ? sessionStorage.getItem('token') : null
+// ── Auth token (in-memory only — never localStorage/sessionStorage for XSS safety) ──
+let _token = null
 
 export function setAuthToken(token) {
   _token = token
-  if (typeof window !== 'undefined') {
-    if (token) {
-      sessionStorage.setItem('token', token)
-    } else {
-      sessionStorage.removeItem('token')
-    }
-  }
 }
 
 export function clearAuthToken() {
   _token = null
-  if (typeof window !== 'undefined') {
-    sessionStorage.removeItem('token')
-  }
 }
 
 export function hasAuthToken() {
