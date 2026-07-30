@@ -58,7 +58,9 @@ def override_auth():
     """Bypass JWT auth validation by overriding get_current_user in FastAPI app."""
     from app.main import app
     from app.auth import get_current_user
-    app.dependency_overrides[get_current_user] = lambda: {"username": "testadmin"}
+    from app.models import User
+    mock_user = User(id=1, username="testadmin", email="testadmin@example.com", display_name="Test Admin")
+    app.dependency_overrides[get_current_user] = lambda: mock_user
     yield
     app.dependency_overrides.clear()
 

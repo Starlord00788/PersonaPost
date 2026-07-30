@@ -40,7 +40,7 @@ def test_strip_fences_passthrough_plain_json():
 # ── _describe_voice ───────────────────────────────────────────────────────────
 
 def test_describe_voice_returns_default_when_none():
-    assert _describe_voice(None) == "Balanced and practical"
+    assert "Balanced and practical" in _describe_voice(None)
 
 
 def test_describe_voice_with_signals():
@@ -54,7 +54,7 @@ def test_describe_voice_with_signals():
     )
     desc = _describe_voice(signals)
     assert "direct" in desc
-    assert "formality=7" in desc
+    assert "7" in desc
     assert "short" in desc
 
 

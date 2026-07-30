@@ -1,5 +1,12 @@
+import pytest
 from app.schemas import VoiceProfileRequest
+from app.services import voice
 from app.services.voice import build_voice_profile
+
+
+@pytest.fixture(autouse=True)
+def mock_no_groq(monkeypatch):
+    monkeypatch.setattr(voice, "_get_groq_client", lambda: None)
 
 
 def test_build_voice_profile_detects_conversational_tone() -> None:
