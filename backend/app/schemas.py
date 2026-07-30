@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -32,6 +32,10 @@ class VoiceSignals(BaseModel):
     cta_style: str
     emoji_usage: str
     confidence: float
+    # Richer fields extracted by LLM (empty when heuristic fallback is used)
+    vocabulary_level: str = Field(default="intermediate", description="basic | intermediate | advanced | expert")
+    key_phrases: List[str] = Field(default_factory=list, description="Characteristic phrases / words from the samples")
+    writing_patterns: List[str] = Field(default_factory=list, description="Structural patterns observed in the writing")
 
 
 class VoiceProfileResponse(BaseModel):
@@ -48,6 +52,7 @@ class TrendItem(BaseModel):
     title: str
     score: float
     source: str
+    reason: str = Field(default="", description="Why this topic is relevant to the user's niche")
 
 
 class TrendResponse(BaseModel):
@@ -94,6 +99,11 @@ class DraftResponse(BaseModel):
         default=None,
         description="DB id of the saved draft row — used for inline editing.",
     )
+    # Analytics fields
+    hook_strength: int = Field(default=0, description="0-10 score for hook quality")
+    best_time_to_post: str = Field(default="", description="Recommended posting time")
+    reach_tier: str = Field(default="", description="Niche / Broad / Viral")
+    readability_grade: str = Field(default="", description="Easy / Medium / Advanced")
 
 
 class DraftUpdateRequest(BaseModel):
@@ -145,6 +155,45 @@ class CalendarResponse(BaseModel):
     items: List[CalendarEntryItem]
 
 
+# ---------------------------------------------------------------------------
+# Multi-platform
+# ---------------------------------------------------------------------------
+
+
+class MultiPlatformDraftResponse(BaseModel):
+    linkedin: DraftResponse
+    x: DraftResponse
+    instagram: DraftResponse
+
+
+# ---------------------------------------------------------------------------
+# Competitor Analysis
+# ---------------------------------------------------------------------------
+
+
+class CompetitorAnalysisRequest(BaseModel):
+    competitor_post: str
+    niche: str = "general"
+    voice_profile: Optional[VoiceSignals] = None
+    goal: str = "educational"
+
+
+class CompetitorAnalysisResponse(BaseModel):
+    strengths: List[str]
+    weaknesses: List[str]
+    rewritten_post: str
+    improvement_summary: str
+
+
+# ---------------------------------------------------------------------------
+# Google OAuth
+# ---------------------------------------------------------------------------
+
+
+class GoogleAuthRequest(BaseModel):
+    id_token: str
+
+
 class CalendarEntryUpdate(BaseModel):
     """Payload for PATCH /api/calendar/{entry_id}."""
     status: Optional[Literal["approved", "scheduled", "published", "archived"]] = None
@@ -180,3 +229,61 @@ class KnowledgeRetrieveResponse(BaseModel):
     niche: str
     query: str
     snippets: List[KnowledgeSnippet]
+
+
+# ---------------------------------------------------------------------------
+# Auth / User
+# ---------------------------------------------------------------------------
+
+class UserCreate(BaseModel):
+    username: str = Field(min_length=3, max_length=80)
+    email: str = Field(min_length=5)
+    password: str = Field(min_length=8)
+    display_name: str = Field(default="", max_length=255)
+
+class UserInfo(BaseModel):
+    user_id: int
+    username: str
+    email: str
+    display_name: str
+    plan: str
+    created_at: datetime
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8)
+
+# ---------------------------------------------------------------------------
+# Notifications
+# ---------------------------------------------------------------------------
+
+class NotificationItem(BaseModel):
+    id: int
+    type: str
+    title: str
+    message: str
+    is_read: bool
+    action_url: Optional[str] = None
+    created_at: datetime
+
+class NotificationCountResponse(BaseModel):
+    unread: int
+
+class NotificationListResponse(BaseModel):
+    items: List[NotificationItem]
+    unread_count: int
+
+
+# ---------------------------------------------------------------------------
+# Stats
+# ---------------------------------------------------------------------------
+
+class UsageStats(BaseModel):
+    total_drafts: int
+    drafts_this_week: int
+    avg_score: float
+    top_platform: str
+    top_niche: str
+    best_score: int
+    streak_days: int  # consecutive days with at least one draft
+    score_distribution: dict  # {"0-50": int, "51-70": int, "71-85": int, "86-100": int}

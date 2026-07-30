@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     # Leave empty to disable Sentry; set to your DSN to enable.
     sentry_dsn: str | None = None
 
+    # ── Google OAuth ─────────────────────────────────────────────────────────
+    google_client_id: str = ""
+    google_client_secret: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     def cors_origin_list(self) -> list[str]:

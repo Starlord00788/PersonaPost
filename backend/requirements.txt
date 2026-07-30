@@ -14,3 +14,5 @@ passlib==1.7.4
 bcrypt==4.0.1
 python-multipart==0.0.20
 sentry-sdk[fastapi]==2.29.1
+google-auth==2.37.0
+google-auth-oauthlib==1.2.1

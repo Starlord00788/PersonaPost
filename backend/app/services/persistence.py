@@ -15,7 +15,7 @@ from app.schemas import (
 )
 
 
-def save_voice_profile(profile: VoiceProfileResponse) -> None:
+def save_voice_profile(profile: VoiceProfileResponse, user_id: Optional[int] = None) -> None:
     """Upsert voice profile by profile_id."""
     with SessionLocal() as session:
         row = (
@@ -26,9 +26,12 @@ def save_voice_profile(profile: VoiceProfileResponse) -> None:
         if row:
             row.summary = profile.summary
             row.signals_json = profile.signals.model_dump_json()
+            if user_id:
+                row.user_id = user_id
         else:
             row = VoiceProfile(
                 profile_id=profile.profile_id,
+                user_id=user_id,
                 summary=profile.summary,
                 signals_json=profile.signals.model_dump_json(),
             )
@@ -36,16 +39,15 @@ def save_voice_profile(profile: VoiceProfileResponse) -> None:
         session.commit()
 
 
-def save_draft(payload: DraftRequest, response: DraftResponse) -> int:
-    """Persist every generated draft (approved=False initially).
-
-    Returns the draft row ID so the frontend can reference it for inline editing.
-    """
+def save_draft(payload: DraftRequest, response: DraftResponse, user_id: Optional[int] = None) -> int:
+    """Persist generated draft. Returns draft row ID."""
     with SessionLocal() as session:
         draft_row = Draft(
+            user_id=user_id,
             niche=payload.niche,
             goal=payload.goal,
             platform=getattr(payload, "platform", "linkedin"),
+            trend_title=getattr(payload, "trend_title", None),
             plan=response.plan,
             draft=response.draft,
             reviewer_score=response.reviewer_score,
@@ -58,18 +60,18 @@ def save_draft(payload: DraftRequest, response: DraftResponse) -> int:
         return draft_row.id
 
 
-def approve_draft(draft_id: int, response: DraftResponse) -> int:
-    """Mark a draft as approved and create a calendar entry.
-
-    Returns the calendar entry ID.
-    """
+def approve_draft(draft_id: int, response: DraftResponse, user_id: Optional[int] = None) -> int:
+    """Mark draft approved and create calendar entry. Returns calendar entry ID."""
     with SessionLocal() as session:
         draft_row = session.query(Draft).filter(Draft.id == draft_id).first()
         if draft_row:
             draft_row.approved = True
+            if user_id and not draft_row.user_id:
+                draft_row.user_id = user_id
             session.flush()
 
         entry = CalendarEntry(
+            user_id=user_id,
             draft_id=draft_id,
             title=response.plan[:255],
             draft_excerpt=response.draft[:500],
@@ -82,17 +84,19 @@ def approve_draft(draft_id: int, response: DraftResponse) -> int:
         return entry.id
 
 
-# ── Legacy helper kept for backward compatibility with existing tests ────────
-def save_approved_draft(payload: DraftRequest, response: DraftResponse) -> int:
-    """Save draft + approve atomically.  Returns calendar entry id."""
-    draft_id = save_draft(payload, response)
-    return approve_draft(draft_id, response)
+def save_approved_draft(payload: DraftRequest, response: DraftResponse, user_id: Optional[int] = None) -> int:
+    """Save + approve atomically. Returns calendar entry id."""
+    draft_id = save_draft(payload, response, user_id=user_id)
+    return approve_draft(draft_id, response, user_id=user_id)
 
 
-def update_draft_text(draft_id: int, new_text: str) -> None:
-    """Persist inline text edits from the frontend draft editor."""
+def update_draft_text(draft_id: int, new_text: str, user_id: Optional[int] = None) -> None:
+    """Persist inline text edits."""
     with SessionLocal() as session:
-        row = session.query(Draft).filter(Draft.id == draft_id).first()
+        q = session.query(Draft).filter(Draft.id == draft_id)
+        if user_id:
+            q = q.filter(Draft.user_id == user_id)
+        row = q.first()
         if not row:
             raise ValueError(f"Draft {draft_id} not found")
         row.draft = new_text
@@ -100,21 +104,21 @@ def update_draft_text(draft_id: int, new_text: str) -> None:
 
 
 def update_calendar_entry(
-    entry_id: int, update: CalendarEntryUpdate
+    entry_id: int, update: CalendarEntryUpdate, user_id: Optional[int] = None
 ) -> CalendarEntryItem:
-    """Update calendar entry status and / or scheduled_for date."""
+    """Update calendar entry status and/or scheduled_for."""
     with SessionLocal() as session:
-        entry = (
-            session.query(CalendarEntry)
-            .filter(CalendarEntry.id == entry_id)
-            .first()
-        )
+        q = session.query(CalendarEntry).filter(CalendarEntry.id == entry_id)
+        if user_id:
+            q = q.filter(CalendarEntry.user_id == user_id)
+        entry = q.first()
         if not entry:
             raise ValueError(f"Calendar entry {entry_id} not found")
         if update.status is not None:
             entry.status = update.status
         if update.scheduled_for is not None:
             entry.scheduled_for = update.scheduled_for
+            entry.notified = False  # Reset notification when rescheduled
         session.commit()
         session.refresh(entry)
         return CalendarEntryItem(
@@ -129,14 +133,12 @@ def update_calendar_entry(
         )
 
 
-def list_calendar_entries(limit: int = 50) -> CalendarResponse:
+def list_calendar_entries(limit: int = 50, user_id: Optional[int] = None) -> CalendarResponse:
     with SessionLocal() as session:
-        rows = (
-            session.query(CalendarEntry)
-            .order_by(CalendarEntry.created_at.desc())
-            .limit(limit)
-            .all()
-        )
+        q = session.query(CalendarEntry)
+        if user_id:
+            q = q.filter(CalendarEntry.user_id == user_id)
+        rows = q.order_by(CalendarEntry.created_at.desc()).limit(limit).all()
 
     items = [
         CalendarEntryItem(

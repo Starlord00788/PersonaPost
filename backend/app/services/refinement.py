@@ -1,10 +1,11 @@
 import json
 import logging
+import re
 from typing import Any
 
 from app.config import settings
 from app.schemas import DraftRequest, DraftResponse, RefinementRequest
-from app.services.generation import _describe_voice, _strip_fences, get_groq_client
+from app.services.generation import _describe_voice, _strip_fences, _parse_groq_json, get_groq_client
 from app.services.review import review_draft
 
 logger = logging.getLogger(__name__)
@@ -83,7 +84,7 @@ Return JSON only — no extra text, no markdown fences:
         )
         raw = response.choices[0].message.content or ""
         cleaned = _strip_fences(raw)
-        parsed = json.loads(cleaned)
+        parsed = _parse_groq_json(cleaned)
         plan = str(parsed.get("plan", "")).strip()
         draft = str(parsed.get("draft", "")).strip()
         if not plan or not draft:

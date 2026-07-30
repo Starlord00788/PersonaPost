@@ -8,6 +8,7 @@ from app.config import settings
 from app.db import init_db
 from app.routes import router
 from app.routes_auth import router as auth_router
+from app.routes_notifications import router as notifications_router
 
 
 def _configure_logging() -> None:
@@ -73,6 +74,7 @@ def create_app() -> FastAPI:
     # Auth routes first so /api/auth/token is registered before protected routes
     app.include_router(auth_router, prefix="/api")
     app.include_router(router, prefix="/api")
+    app.include_router(notifications_router, prefix="/api")
 
     return app
 
